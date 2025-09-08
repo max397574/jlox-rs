@@ -1,0 +1,4 @@
+- also add &&, ||
+- allow both types of quotes for strings
+- added modulo operator
+- allow ommitting parentheses around if/while condition

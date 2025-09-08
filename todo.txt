@@ -1,0 +1,13 @@
+- support `i+=1` or `i++` (or both lol)
+- somehow make `print(func)` print out function name
+- add `break` statements
+- support rust-like ranges in for loops?  for i in 0..=30
+- also make and/or stuff be expressions? to allow things like x=3 and x or y? (like in lua)
+- consider making variables immutable by default, introduce `mut` keyword (just because I can, as challenge)
+- more idiomatic rust
+  - error handling with result
+  - clean up the operations in interpreter to avoid code duplication
+- add additional stuff
+  - &&
+  - ||
+- doesn't add comments to line count (for reporting errors)
