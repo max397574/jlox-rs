@@ -4,10 +4,10 @@ use crate::{
     lox_callable::{Function, LoxCallable, NativeFunction},
     report,
     stmt::{self, Expression, Stmt},
-    token::{LiteralType, TokenType},
+    token::{LiteralType, Token, TokenType},
 };
 
-use std::{cell::RefCell, time::SystemTime};
+use std::{cell::RefCell, collections::HashMap, time::SystemTime};
 use std::{rc::Rc, time::UNIX_EPOCH};
 
 #[derive(Debug)]
@@ -19,6 +19,7 @@ pub enum Exit {
 pub struct Interpreter {
     pub environment: Rc<RefCell<Environment>>,
     pub globals: Rc<RefCell<Environment>>,
+    locals: HashMap<Expr, usize>,
 }
 
 impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
@@ -218,14 +219,21 @@ impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
     }
 
     fn visit_variable(&mut self, expr: &expr::Variable) -> Result<LiteralType, Exit> {
-        self.environment.borrow_mut().get(expr.name.clone())
+        self.look_up_variable(expr.name.clone(), Expr::Variable(expr.clone()))
     }
 
     fn visit_assignment(&mut self, expr: &expr::Assignment) -> Result<LiteralType, Exit> {
         let value = self.evaluate(&expr.value)?;
-        self.environment
-            .borrow_mut()
-            .assign(expr.name.clone(), value.clone())?;
+        let distance = self.locals.get(&Expr::Assignment(expr.clone()));
+        if let Some(d) = distance {
+            self.environment
+                .borrow_mut()
+                .assign_at(*d, expr.name.clone(), value.clone());
+        } else {
+            self.globals
+                .borrow_mut()
+                .assign(&expr.name, value.clone())?;
+        }
         Ok(value)
     }
 }
@@ -273,11 +281,15 @@ impl stmt::Visitor<Result<(), Exit>> for Interpreter {
     }
 
     fn visit_function(&mut self, stmt: &stmt::Function) -> Result<(), Exit> {
-        let function = Function::new(stmt.clone());
+        let function = Function::new(stmt.clone(), self.environment.clone());
         self.environment
             .borrow_mut()
             .define(stmt.name.lexeme.clone(), LiteralType::Function(function));
         Ok(())
+    }
+
+    fn visit_return(&mut self, expr: &stmt::Return) -> Result<(), Exit> {
+        Err(Exit::Return(self.evaluate(&expr.value)?))
     }
 }
 
@@ -307,6 +319,7 @@ impl Interpreter {
         Self {
             environment: globals.clone(),
             globals,
+            locals: HashMap::new(),
         }
     }
 
@@ -345,6 +358,19 @@ impl Interpreter {
 
     pub fn evaluate(&mut self, expr: &Expr) -> Result<LiteralType, Exit> {
         expr.accept(self)
+    }
+
+    pub fn resolve(&mut self, expr: &Expr, depth: usize) {
+        self.locals.insert(expr.clone(), depth);
+    }
+
+    pub fn look_up_variable(&mut self, name: Token, expr: Expr) -> Result<LiteralType, Exit> {
+        let distance = self.locals.get(&expr);
+        if let Some(d) = distance {
+            self.environment.borrow_mut().get_at(*d, name)
+        } else {
+            self.globals.borrow().get(&name)
+        }
     }
 
     /// Everything but false and nil is truthy

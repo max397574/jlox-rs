@@ -1,4 +1,5 @@
 - support `i+=1` or `i++` (or both lol)
+- add anonymous functions https://craftinginterpreters.com/functions.html#challenges
 - somehow make `print(func)` print out function name
 - add `break` statements
 - support rust-like ranges in for loops?  for i in 0..=30
@@ -11,3 +12,6 @@
   - &&
   - ||
 - doesn't add comments to line count (for reporting errors)
+- more additional analysis
+  - warn about code after return statement
+  - `break` not inside loop

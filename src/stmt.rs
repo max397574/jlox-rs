@@ -8,6 +8,13 @@ pub enum Stmt {
     Var(Var),
     While(While),
     Function(Function),
+    Return(Return),
+}
+
+#[derive(Debug, Clone)]
+pub struct Return {
+    pub keyword: Token,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +59,7 @@ pub trait Visitor<T> {
     fn visit_var(&mut self, stmt: &Var) -> T;
     fn visit_while(&mut self, stmt: &While) -> T;
     fn visit_function(&mut self, stmt: &Function) -> T;
+    fn visit_return(&mut self, expr: &Return) -> T;
 }
 
 impl Stmt {
@@ -63,6 +71,7 @@ impl Stmt {
             Stmt::Var(print) => visitor.visit_var(print),
             Stmt::While(while_stmt) => visitor.visit_while(while_stmt),
             Stmt::Function(func) => visitor.visit_function(func),
+            Stmt::Return(ret) => visitor.visit_return(ret),
         }
     }
 }

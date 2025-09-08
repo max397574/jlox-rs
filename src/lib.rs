@@ -3,6 +3,7 @@ mod expr;
 mod interpreter;
 mod lox_callable;
 mod parser;
+mod resolver;
 mod scanner;
 mod stmt;
 mod token;
@@ -12,6 +13,7 @@ use std::{fs, io};
 
 use crate::interpreter::Interpreter;
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 use crate::scanner::Scanner;
 
 pub fn run_file(arg: &str) {
@@ -38,6 +40,11 @@ fn run(content: &str) {
 
     if let Ok(stmts) = stmts {
         let mut interpreter = Interpreter::new();
+        let mut resolver = Resolver::new(&mut interpreter);
+        if resolver.resolve_statements(&stmts).is_err() {
+            eprintln!("Parsing error while resolving");
+            return;
+        }
         if interpreter.interpret(&stmts).is_err() {
             eprintln!("Runtime Error");
         }

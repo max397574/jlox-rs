@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     environment::Environment,
     interpreter::{Exit, Interpreter},
@@ -29,12 +31,14 @@ pub trait LoxCallable {
 #[derive(Clone, Debug)]
 pub struct Function {
     declaration: Box<stmt::Function>,
+    closure: Rc<RefCell<Environment>>,
 }
 
 impl Function {
-    pub fn new(declaration: stmt::Function) -> Self {
+    pub fn new(declaration: stmt::Function, closure: Rc<RefCell<Environment>>) -> Self {
         Self {
             declaration: Box::new(declaration),
+            closure,
         }
     }
 }
@@ -45,13 +49,20 @@ impl LoxCallable for Function {
         interpreter: &mut Interpreter,
         arguments: &[LiteralType],
     ) -> Result<LiteralType, Exit> {
-        let mut env = Environment::new_with_enclosing(interpreter.globals.clone());
+        let mut env = Environment::new_with_enclosing(self.closure.clone());
         for (param, arg) in self.declaration.params.iter().zip(arguments) {
             env.define(param.lexeme.clone(), arg.clone());
         }
 
-        interpreter.execute_block(&self.declaration.body, env)?;
-        Ok(LiteralType::Nil)
+        if let Err(exit) = interpreter.execute_block(&self.declaration.body, env) {
+            if let Exit::Return(ret_val) = exit {
+                Ok(ret_val)
+            } else {
+                Err(exit)
+            }
+        } else {
+            Ok(LiteralType::Nil)
+        }
     }
 
     fn arity(&self) -> usize {

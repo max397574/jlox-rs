@@ -14,6 +14,15 @@ pub struct Parser {
 
 pub struct ParseError {}
 
+static mut UUID: usize = 0;
+
+pub fn uuid_next() -> usize {
+    unsafe {
+        UUID += 1;
+        UUID
+    }
+}
+
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }
@@ -85,7 +94,7 @@ impl Parser {
                 }
             }
         }
-        self.consume(&RightParen, &format!("Expected ')' after parameters"))?;
+        self.consume(&RightParen, "Expected ')' after parameters")?;
         self.consume(&LeftBrace, &format!("Expected '{{' before {kind} body"))?;
         let body = self.block()?;
         Ok(Stmt::Function(stmt::Function { name, params, body }))
@@ -95,6 +104,7 @@ impl Parser {
         let name = self.consume(&Identifier, "Expect variable name.")?;
         let mut initializer = Expr::Literal(Literal {
             value: LiteralType::Nil,
+            uuid: uuid_next(),
         });
 
         if self.matches(&[Equal]) {
@@ -110,19 +120,40 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.matches(&[For]) {
-            self.for_statement()
-        } else if self.matches(&[If]) {
-            self.if_statement()
-        } else if self.matches(&[While]) {
-            self.while_statement()
-        } else if self.matches(&[LeftBrace]) {
-            Ok(Stmt::Block(Block {
-                statements: self.block()?,
-            }))
-        } else {
-            self.expression_statement()
+        if self.is_at_end() {
+            return self.expression_statement();
         }
+        self.advance();
+        match self.previous().token_type {
+            For => self.for_statement(),
+            If => self.if_statement(),
+            While => self.while_statement(),
+            LeftBrace => Ok(Stmt::Block(Block {
+                statements: self.block()?,
+            })),
+            Return => self.return_statement(),
+            _ => {
+                self.current -= 1;
+                self.expression_statement()
+            }
+        }
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let keyword = self.previous();
+        let value = if !self.check(&Semicolon) {
+            self.expression()?
+        } else {
+            Expr::Literal(expr::Literal {
+                value: LiteralType::Nil,
+                uuid: uuid_next(),
+            })
+        };
+        self.consume(&Semicolon, "Expect ';' after return.")?;
+        Ok(Stmt::Return(stmt::Return {
+            keyword,
+            value: Box::new(value),
+        }))
     }
 
     fn for_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -140,6 +171,7 @@ impl Parser {
         } else {
             Expr::Literal(Literal {
                 value: LiteralType::Boolean(true),
+                uuid: uuid_next(),
             })
         };
         self.consume(&Semicolon, "Expect ';' after loop condition.")?;
@@ -261,6 +293,7 @@ impl Parser {
                 return Ok(Expr::Assignment(Assignment {
                     name,
                     value: Box::new(value),
+                    uuid: uuid_next(),
                 }));
             }
 
@@ -281,6 +314,7 @@ impl Parser {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             })
         }
 
@@ -297,6 +331,7 @@ impl Parser {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             })
         }
 
@@ -313,6 +348,7 @@ impl Parser {
                 left: Box::new(expr?),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             }))
         }
 
@@ -329,6 +365,7 @@ impl Parser {
                 left: Box::new(expr?),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             }))
         }
 
@@ -345,6 +382,7 @@ impl Parser {
                 left: Box::new(expr?),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             }))
         }
 
@@ -361,6 +399,7 @@ impl Parser {
                 left: Box::new(expr?),
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             }))
         }
 
@@ -374,6 +413,7 @@ impl Parser {
             Ok(Expr::Unary(Unary {
                 operator,
                 right: Box::new(right),
+                uuid: uuid_next(),
             }))
         } else {
             self.call()
@@ -414,27 +454,39 @@ impl Parser {
             callee: Box::new(callee),
             paren,
             arguments: args,
+            uuid: uuid_next(),
         }))
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.matches(&[True]) {
-            Ok(Expr::Literal(Literal::new(LiteralType::Boolean(true))))
+            Ok(Expr::Literal(Literal::new(
+                LiteralType::Boolean(true),
+                uuid_next(),
+            )))
         } else if self.matches(&[False]) {
-            Ok(Expr::Literal(Literal::new(LiteralType::Boolean(false))))
+            Ok(Expr::Literal(Literal::new(
+                LiteralType::Boolean(false),
+                uuid_next(),
+            )))
         } else if self.matches(&[Nil]) {
-            Ok(Expr::Literal(Literal::new(LiteralType::Nil)))
+            Ok(Expr::Literal(Literal::new(LiteralType::Nil, uuid_next())))
         } else if self.matches(&[Number, String]) {
-            Ok(Expr::Literal(Literal::new(self.previous().literal)))
+            Ok(Expr::Literal(Literal::new(
+                self.previous().literal,
+                uuid_next(),
+            )))
         } else if self.matches(&[Identifier]) {
             Ok(Expr::Variable(Variable {
                 name: self.previous(),
+                uuid: uuid_next(),
             }))
         } else if self.matches(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(&RightParen, "Expect ')' after expression.")?;
             Ok(Expr::Grouping(Grouping {
                 expr: Box::new(expr),
+                uuid: uuid_next(),
             }))
         } else {
             self.error(self.peek(), "Expect expression.");

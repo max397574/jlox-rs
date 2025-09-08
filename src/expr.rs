@@ -1,4 +1,5 @@
 use crate::token::{LiteralType, Token};
+use std::hash::Hash;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
@@ -16,11 +17,13 @@ pub enum Expr {
 pub struct Assignment {
     pub name: Token,
     pub value: Box<Expr>,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub name: Token,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +31,7 @@ pub struct Binary {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -35,16 +39,19 @@ pub struct Call {
     pub callee: Box<Expr>,
     pub paren: Token,
     pub arguments: Vec<Expr>,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct Grouping {
     pub expr: Box<Expr>,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct Literal {
     pub value: LiteralType,
+    pub uuid: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -52,11 +59,12 @@ pub struct Logical {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
+    pub uuid: usize,
 }
 
 impl Literal {
-    pub fn new(value: LiteralType) -> Self {
-        Self { value }
+    pub fn new(value: LiteralType, uuid: usize) -> Self {
+        Self { value, uuid }
     }
 }
 
@@ -64,6 +72,7 @@ impl Literal {
 pub struct Unary {
     pub operator: Token,
     pub right: Box<Expr>,
+    pub uuid: usize,
 }
 
 pub trait Visitor<T> {
@@ -89,5 +98,33 @@ impl Expr {
             Expr::Unary(unary) => visitor.visit_unary(unary),
             Expr::Variable(variable) => visitor.visit_variable(variable),
         }
+    }
+
+    fn get_uid(&self) -> usize {
+        match self {
+            Expr::Assignment(e) => e.uuid,
+            Expr::Binary(e) => e.uuid,
+            Expr::Grouping(e) => e.uuid,
+            Expr::Literal(e) => e.uuid,
+            Expr::Logical(e) => e.uuid,
+            Expr::Unary(e) => e.uuid,
+            Expr::Variable(e) => e.uuid,
+            Expr::Call(e) => e.uuid,
+        }
+    }
+}
+
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_uid() == other.get_uid()
+    }
+}
+
+impl Eq for Expr {}
+
+impl Hash for Expr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // core::mem::discriminant(self).hash(state);
+        self.get_uid().hash(state);
     }
 }

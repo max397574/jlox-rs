@@ -32,7 +32,7 @@ impl Environment {
         self.values.insert(name, value);
     }
 
-    pub fn assign(&mut self, name: Token, value: LiteralType) -> Result<(), Exit> {
+    pub fn assign(&mut self, name: &Token, value: LiteralType) -> Result<(), Exit> {
         #[allow(clippy::map_entry)]
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value);
@@ -50,7 +50,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: Token) -> Result<LiteralType, Exit> {
+    pub fn get(&self, name: &Token) -> Result<LiteralType, Exit> {
         if self.values.contains_key(&name.lexeme) {
             Ok(self.values.get(&name.lexeme).unwrap().clone())
         } else {
@@ -63,6 +63,30 @@ impl Environment {
                 &format!("Undefinied variable {}.", name.lexeme),
             );
             Err(Exit::RuntimeError)
+        }
+    }
+
+    pub fn get_at(&self, distance: usize, name: Token) -> Result<LiteralType, Exit> {
+        if distance == 0 {
+            self.get(&name)
+        } else {
+            self.enclosing
+                .as_ref()
+                .unwrap()
+                .borrow()
+                .get_at(distance - 1, name)
+        }
+    }
+
+    pub fn assign_at(&mut self, distance: usize, name: Token, value: LiteralType) {
+        if distance == 0 {
+            self.define(name.lexeme, value);
+        } else {
+            self.enclosing
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .assign_at(distance - 1, name, value);
         }
     }
 }
