@@ -46,3 +46,42 @@ fun makeCounter() {
 var counter = makeCounter();
 counter(); // "1".
 counter(); // "2".
+
+class DevonshireCream {
+  serveOn() {
+    return "Scones";
+  }
+}
+
+print(DevonshireCream);
+
+class Bagel {}
+var bagel = Bagel();
+print(bagel);
+
+bagel.sort = "test";
+print(bagel.sort);
+
+class Bacon {
+  eat() {
+    print("Crunch crunch crunch!");
+  }
+}
+
+Bacon().eat(); // Prints "Crunch crunch crunch!".
+
+
+class Cake {
+  new(adjective) {
+    print("executed constructor");
+    self.adjective = adjective;
+  }
+  taste() {
+    print("The " + self.flavor + " cake is " + self.adjective + "!");
+  }
+}
+
+var cake = Cake("delicious");
+print(cake);
+cake.flavor = "German chocolate";
+cake.taste(); // Prints "The German chocolate cake is delicious!".

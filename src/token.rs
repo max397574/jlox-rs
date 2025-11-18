@@ -1,4 +1,4 @@
-use crate::lox_callable::{Function, NativeFunction};
+use crate::lox_callable::{Callable, NativeFunction};
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ pub enum LiteralType {
     Number(f64),
     Nil,
     Boolean(bool),
-    Function(Function),
+    Callable(Callable),
     NativeFunction(NativeFunction),
 }
 
@@ -43,7 +43,18 @@ impl Display for LiteralType {
             LiteralType::Number(val) => write!(f, "{val}"),
             LiteralType::Nil => write!(f, "nil"),
             LiteralType::Boolean(val) => write!(f, "\"{val}\""),
-            LiteralType::Function(_) => write!(f, "<fn>"),
+            LiteralType::Callable(Callable::Class(x)) => {
+                write!(f, "Class: {}", x)
+            }
+            LiteralType::Callable(Callable::Instance(x)) => {
+                write!(
+                    f,
+                    "Instance of class: {}, fields set: {:?}",
+                    x.borrow().class,
+                    x.borrow().fields
+                )
+            }
+            LiteralType::Callable(_) => write!(f, "<callable>"),
             LiteralType::NativeFunction(_) => write!(f, "<native fn>"),
         }
     }
@@ -95,7 +106,7 @@ pub enum TokenType {
     Or,
     Return,
     Super,
-    This,
+    SelfKW,
     True,
     Var,
     While,
@@ -142,7 +153,7 @@ impl Display for TokenType {
             TokenType::Or => write!(f, "Or"),
             TokenType::Return => write!(f, "Return"),
             TokenType::Super => write!(f, "Super"),
-            TokenType::This => write!(f, "This"),
+            TokenType::SelfKW => write!(f, "Self"),
             TokenType::True => write!(f, "True"),
             TokenType::Var => write!(f, "Var"),
             TokenType::While => write!(f, "While"),

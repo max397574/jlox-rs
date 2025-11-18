@@ -1,6 +1,9 @@
 use crate::{
-    expr::{self, Assignment, Binary, Expr, Grouping, Literal, Logical, Unary, Variable},
-    stmt::{self, Block, Expression, Stmt, Var},
+    expr::{
+        self, Assignment, Binary, Expr, Get, Grouping, Literal, Logical, SelfExpr, Set, Unary,
+        Variable,
+    },
+    stmt::{self, Block, Class, Expression, Stmt, Var},
     token::{
         LiteralType, Token,
         TokenType::{self, *},
@@ -63,7 +66,9 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        let res = if self.matches(&[Var]) {
+        let res = if self.matches(&[Class]) {
+            self.class_declaration()
+        } else if self.matches(&[Var]) {
             self.var_declaration()
         } else if self.matches(&[Fun]) {
             self.fun_declaration("function")
@@ -77,6 +82,17 @@ impl Parser {
             self.synchronize();
             Err(ParseError {})
         }
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(&TokenType::Identifier, "Expected class name.")?;
+        self.consume(&TokenType::LeftBrace, "Expected '{' before class body.")?;
+        let mut methods = Vec::new();
+        while !self.check(&RightBrace) && !self.is_at_end() {
+            methods.push(self.fun_declaration("method")?);
+        }
+        self.consume(&TokenType::RightBrace, "Expected '}' after class body.")?;
+        Ok(Stmt::Class(Class { name, methods }))
     }
 
     fn fun_declaration(&mut self, kind: &str) -> Result<Stmt, ParseError> {
@@ -295,6 +311,13 @@ impl Parser {
                     value: Box::new(value),
                     uuid: uuid_next(),
                 }));
+            } else if let Expr::Get(g) = expr {
+                return Ok(Expr::Set(Set {
+                    uuid: uuid_next(),
+                    object: g.object,
+                    value: Box::new(value),
+                    name: g.name,
+                }));
             }
 
             self.error(&equals, "Invalid assignment target.");
@@ -425,6 +448,13 @@ impl Parser {
         loop {
             if self.matches(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.matches(&[Dot]) {
+                let name = self.consume(&Identifier, "Expect property name after '.'.")?;
+                expr = Expr::Get(Get {
+                    object: Box::new(expr),
+                    name,
+                    uuid: uuid_next(),
+                })
             } else {
                 break;
             }
@@ -471,6 +501,11 @@ impl Parser {
             )))
         } else if self.matches(&[Nil]) {
             Ok(Expr::Literal(Literal::new(LiteralType::Nil, uuid_next())))
+        } else if self.matches(&[SelfKW]) {
+            Ok(Expr::SelfExpr(SelfExpr {
+                keyword: self.previous(),
+                uuid: uuid_next(),
+            }))
         } else if self.matches(&[Number, String]) {
             Ok(Expr::Literal(Literal::new(
                 self.previous().literal,

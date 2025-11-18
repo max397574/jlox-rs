@@ -12,6 +12,26 @@
   - &&
   - ||
 - doesn't add comments to line count (for reporting errors)
+- something like metatables in lua
+  - to allow OOP like this? not needed because classes?
+  - and ofc the cool stuff with overwriting addition, calling etc
 - more additional analysis
   - warn about code after return statement
   - `break` not inside loop
+- add for loop
+- stdlib stuff
+  - fmt thing (just use format macro from rust?)
+  - reading from/to file
+  - reading from stdin
+  - string operations (find, substring)
+  - debugging classes
+    - print out e.g. methods
+- more types
+  - structs
+  - enums
+  - lists/tables (perhaps like in lua??), just everything with a hashmap
+- private/public fields for classes
+- immutable variables
+- add second `get` method variant to classes which can return nil
+  - done with `get_or_nil`
+  - actually add syntax to use this. Perhaps indexing class with `?` ?

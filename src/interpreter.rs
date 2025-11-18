@@ -1,7 +1,7 @@
 use crate::{
     environment::Environment,
     expr::{self, Binary, Expr, Grouping, Literal, Logical, Unary},
-    lox_callable::{Function, LoxCallable, NativeFunction},
+    lox_callable::{Callable, LoxCallable, LoxClass, LoxFunction, NativeFunction},
     report,
     stmt::{self, Expression, Stmt},
     token::{LiteralType, Token, TokenType},
@@ -165,9 +165,13 @@ impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
                 func.check_arity(arguments.len(), &expr.paren)?;
                 func.call(self, &arguments)
             }
-            LiteralType::Function(func) => {
+            LiteralType::Callable(Callable::Function(func)) => {
                 func.check_arity(arguments.len(), &expr.paren)?;
                 func.call(self, &arguments)
+            }
+            LiteralType::Callable(Callable::Class(class)) => {
+                class.check_arity(arguments.len(), &expr.paren)?;
+                class.call(self, &arguments)
             }
             _ => {
                 report(expr.paren.line, "", "Can only call functions/methods");
@@ -219,7 +223,7 @@ impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
     }
 
     fn visit_variable(&mut self, expr: &expr::Variable) -> Result<LiteralType, Exit> {
-        self.look_up_variable(expr.name.clone(), Expr::Variable(expr.clone()))
+        self.look_up_variable(&expr.name, &Expr::Variable(expr.clone()))
     }
 
     fn visit_assignment(&mut self, expr: &expr::Assignment) -> Result<LiteralType, Exit> {
@@ -235,6 +239,32 @@ impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
                 .assign(&expr.name, value.clone())?;
         }
         Ok(value)
+    }
+
+    fn visit_get(&mut self, expr: &expr::Get) -> Result<LiteralType, Exit> {
+        let object = self.evaluate(&expr.object)?;
+        if let LiteralType::Callable(Callable::Instance(instance)) = object {
+            instance.borrow().get(&expr.name)
+        } else {
+            report(expr.name.line, "", "Only instances have properties.");
+            Err(Exit::RuntimeError)
+        }
+    }
+
+    fn visit_set(&mut self, expr: &expr::Set) -> Result<LiteralType, Exit> {
+        let object = self.evaluate(&expr.object)?;
+        if let LiteralType::Callable(Callable::Instance(instance)) = object {
+            let value = self.evaluate(&expr.value)?;
+            instance.borrow_mut().set(&expr.name, &value);
+            Ok(value)
+        } else {
+            report(expr.name.line, "", "Only instances have fields.");
+            Err(Exit::RuntimeError)
+        }
+    }
+
+    fn visit_self_expr(&mut self, expr: &expr::SelfExpr) -> Result<LiteralType, Exit> {
+        self.look_up_variable(&expr.keyword, &Expr::SelfExpr(expr.clone()))
     }
 }
 
@@ -281,10 +311,36 @@ impl stmt::Visitor<Result<(), Exit>> for Interpreter {
     }
 
     fn visit_function(&mut self, stmt: &stmt::Function) -> Result<(), Exit> {
-        let function = Function::new(stmt.clone(), self.environment.clone());
+        let function = LoxFunction::new(stmt.clone(), self.environment.clone(), false);
+        self.environment.borrow_mut().define(
+            stmt.name.lexeme.clone(),
+            LiteralType::Callable(Callable::Function(function)),
+        );
+        Ok(())
+    }
+
+    fn visit_class(&mut self, stmt: &stmt::Class) -> Result<(), Exit> {
         self.environment
             .borrow_mut()
-            .define(stmt.name.lexeme.clone(), LiteralType::Function(function));
+            .define(stmt.name.lexeme.clone(), LiteralType::Nil);
+
+        let mut methods = HashMap::new();
+        for method in stmt.methods.iter() {
+            if let Stmt::Function(method) = method {
+                let function = LoxFunction::new(
+                    method.clone(),
+                    Rc::clone(&self.environment),
+                    method.name.lexeme == "new",
+                );
+                methods.insert(method.name.lexeme.clone(), function);
+            }
+        }
+
+        let class = LoxClass::new(stmt.name.lexeme.clone(), methods);
+        self.environment
+            .borrow_mut()
+            .assign(&stmt.name, LiteralType::Callable(Callable::Class(class)))?;
+
         Ok(())
     }
 
@@ -296,6 +352,7 @@ impl stmt::Visitor<Result<(), Exit>> for Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         let globals = Rc::new(RefCell::new(Environment::new()));
+        // Std functions
         globals.borrow_mut().define(
             String::from("clock"),
             LiteralType::NativeFunction(NativeFunction {
@@ -364,12 +421,12 @@ impl Interpreter {
         self.locals.insert(expr.clone(), depth);
     }
 
-    pub fn look_up_variable(&mut self, name: Token, expr: Expr) -> Result<LiteralType, Exit> {
-        let distance = self.locals.get(&expr);
+    pub fn look_up_variable(&mut self, name: &Token, expr: &Expr) -> Result<LiteralType, Exit> {
+        let distance = self.locals.get(expr);
         if let Some(d) = distance {
             self.environment.borrow_mut().get_at(*d, name)
         } else {
-            self.globals.borrow().get(&name)
+            self.globals.borrow().get(name)
         }
     }
 
@@ -380,7 +437,7 @@ impl Interpreter {
             LiteralType::Number(_) => true,
             LiteralType::Nil => false,
             LiteralType::Boolean(val) => *val,
-            LiteralType::Function(_) => true,
+            LiteralType::Callable(_) => true,
             LiteralType::NativeFunction(_) => true,
         }
     }

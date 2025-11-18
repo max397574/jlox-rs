@@ -3,6 +3,7 @@ use crate::{expr::Expr, token::Token};
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Block(Block),
+    Class(Class),
     Expression(Expression),
     If(If),
     Var(Var),
@@ -21,6 +22,13 @@ pub struct Return {
 pub struct Block {
     pub statements: Vec<Stmt>,
 }
+
+#[derive(Debug, Clone)]
+pub struct Class {
+    pub name: Token,
+    pub methods: Vec<Stmt>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Token,
@@ -54,6 +62,7 @@ pub struct Expression {
 
 pub trait Visitor<T> {
     fn visit_block(&mut self, stmt: &Block) -> T;
+    fn visit_class(&mut self, stmt: &Class) -> T;
     fn visit_expression(&mut self, stmt: &Expression) -> T;
     fn visit_if(&mut self, stmt: &If) -> T;
     fn visit_var(&mut self, stmt: &Var) -> T;
@@ -66,6 +75,7 @@ impl Stmt {
     pub fn accept<T>(&self, visitor: &mut dyn Visitor<T>) -> T {
         match self {
             Stmt::Block(block) => visitor.visit_block(block),
+            Stmt::Class(class) => visitor.visit_class(class),
             Stmt::Expression(expression) => visitor.visit_expression(expression),
             Stmt::If(if_stmt) => visitor.visit_if(if_stmt),
             Stmt::Var(print) => visitor.visit_var(print),

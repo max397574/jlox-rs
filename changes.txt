@@ -1,4 +1,7 @@
 - also add &&, ||
 - allow both types of quotes for strings
 - added modulo operator
+- made print a function
 - allow ommitting parentheses around if/while condition
+- used `self` instead of `this` (we're writing this in rust and not java after all)
+- use `new` instead of `init` for init function

@@ -12,12 +12,21 @@ pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum FunctionType {
     None,
     Function,
+    Initializer,
+    Method,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ClassType {
+    None,
+    Class,
 }
 
 impl Resolver<'_> {
@@ -26,6 +35,7 @@ impl Resolver<'_> {
             interpreter,
             scopes: Vec::new(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 
@@ -53,7 +63,7 @@ impl Resolver<'_> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: Token) -> Result<(), ParseError> {
+    fn declare(&mut self, name: &Token) -> Result<(), ParseError> {
         if !self.scopes.is_empty() {
             if self.scopes.last().unwrap().contains_key(&name.lexeme) {
                 crate::error(
@@ -62,14 +72,20 @@ impl Resolver<'_> {
                 );
                 return Err(ParseError {});
             }
-            self.scopes.last_mut().unwrap().insert(name.lexeme, false);
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert(name.lexeme.clone(), false);
         }
         Ok(())
     }
 
-    fn define(&mut self, name: Token) {
+    fn define(&mut self, name: &Token) {
         if !self.scopes.is_empty() {
-            self.scopes.last_mut().unwrap().insert(name.lexeme, true);
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert(name.lexeme.clone(), true);
         }
     }
 
@@ -90,8 +106,8 @@ impl Resolver<'_> {
         self.current_function = function_type;
         self.begin_scope();
         for param in function.params.iter() {
-            self.declare(param.clone())?;
-            self.define(param.clone());
+            self.declare(param)?;
+            self.define(param);
         }
         self.resolve_statements(&function.body)?;
         self.end_scope();
@@ -154,6 +170,26 @@ impl expr::Visitor<Result<(), ParseError>> for Resolver<'_> {
         self.resolve_expr(&expr.right)?;
         Ok(())
     }
+
+    fn visit_get(&mut self, expr: &expr::Get) -> Result<(), ParseError> {
+        self.resolve_expr(&expr.object)?;
+        Ok(())
+    }
+
+    fn visit_set(&mut self, expr: &expr::Set) -> Result<(), ParseError> {
+        self.resolve_expr(&expr.value)?;
+        self.resolve_expr(&expr.object)?;
+        Ok(())
+    }
+
+    fn visit_self_expr(&mut self, expr: &expr::SelfExpr) -> Result<(), ParseError> {
+        if let ClassType::None = self.current_class {
+            crate::error(expr.keyword.line, "Can't use 'this' ouside of a class.");
+            return Err(ParseError {});
+        }
+        self.resolve_local(&Expr::SelfExpr(expr.clone()), expr.keyword.clone());
+        Ok(())
+    }
 }
 
 impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
@@ -161,6 +197,37 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
         self.begin_scope();
         self.resolve_statements(&stmt.statements)?;
         self.end_scope();
+        Ok(())
+    }
+
+    fn visit_class(&mut self, stmt: &stmt::Class) -> Result<(), ParseError> {
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+        self.declare(&stmt.name)?;
+        self.define(&stmt.name);
+
+        self.begin_scope();
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .insert(String::from("self"), true);
+
+        for method in stmt.methods.iter() {
+            if let Stmt::Function(method) = method {
+                let declaration = if method.name.lexeme == "new" {
+                    FunctionType::Initializer
+                } else {
+                    FunctionType::Method
+                };
+
+                self.resolve_function(method, declaration)?;
+            }
+        }
+
+        self.end_scope();
+
+        self.current_class = enclosing_class;
+
         Ok(())
     }
 
@@ -179,9 +246,9 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
     }
 
     fn visit_var(&mut self, stmt: &stmt::Var) -> Result<(), ParseError> {
-        self.declare(stmt.name.clone())?;
+        self.declare(&stmt.name)?;
         self.resolve_expr(&stmt.initializer)?;
-        self.define(stmt.name.clone());
+        self.define(&stmt.name);
 
         Ok(())
     }
@@ -193,8 +260,8 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
     }
 
     fn visit_function(&mut self, stmt: &stmt::Function) -> Result<(), ParseError> {
-        self.declare(stmt.name.clone())?;
-        self.define(stmt.name.clone());
+        self.declare(&stmt.name)?;
+        self.define(&stmt.name);
 
         self.resolve_function(stmt, FunctionType::Function)?;
         Ok(())
@@ -206,6 +273,9 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
                 stmt.keyword.line,
                 "Can't return without enclosing function!",
             );
+            return Err(ParseError {});
+        } else if let FunctionType::Initializer = self.current_function {
+            crate::error(stmt.keyword.line, "Can't return from an initializer!");
             return Err(ParseError {});
         }
         self.resolve_expr(&stmt.value)?;

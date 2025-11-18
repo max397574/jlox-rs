@@ -3,6 +3,7 @@ use crate::{
     report,
     token::{LiteralType, Token},
 };
+use std::backtrace::Backtrace;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -66,9 +67,9 @@ impl Environment {
         }
     }
 
-    pub fn get_at(&self, distance: usize, name: Token) -> Result<LiteralType, Exit> {
+    pub fn get_at(&self, distance: usize, name: &Token) -> Result<LiteralType, Exit> {
         if distance == 0 {
-            self.get(&name)
+            self.get(name)
         } else {
             self.enclosing
                 .as_ref()
