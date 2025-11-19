@@ -3,7 +3,6 @@ use crate::{
     report,
     token::{LiteralType, Token},
 };
-use std::backtrace::Backtrace;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

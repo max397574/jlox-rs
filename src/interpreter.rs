@@ -7,8 +7,12 @@ use crate::{
     token::{LiteralType, Token, TokenType},
 };
 
-use std::{cell::RefCell, collections::HashMap, time::SystemTime};
-use std::{rc::Rc, time::UNIX_EPOCH};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug)]
 pub enum Exit {

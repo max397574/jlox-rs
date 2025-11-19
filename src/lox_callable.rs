@@ -95,7 +95,7 @@ impl LoxCallable for LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[LiteralType],
     ) -> Result<LiteralType, Exit> {
-        let mut env = Environment::new_with_enclosing(self.closure.clone());
+        let mut env = Environment::new_with_enclosing(Rc::clone(&self.closure));
         for (param, arg) in self.declaration.params.iter().zip(arguments) {
             env.define(param.lexeme.clone(), arg.clone());
         }
