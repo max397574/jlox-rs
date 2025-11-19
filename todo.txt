@@ -1,3 +1,8 @@
+Inheritance
+
+Then done with book
+
+Personal improvements:
 - support `i+=1` or `i++` (or both lol)
 - add anonymous functions https://craftinginterpreters.com/functions.html#challenges
 - somehow make `print(func)` print out function name
