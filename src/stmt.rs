@@ -26,6 +26,7 @@ pub struct Block {
 #[derive(Debug, Clone)]
 pub struct Class {
     pub name: Token,
+    pub superclass: Option<Expr>,
     pub methods: Vec<Stmt>,
 }
 

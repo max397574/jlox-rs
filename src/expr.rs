@@ -13,6 +13,7 @@ pub enum Expr {
     Set(Set),
     Unary(Unary),
     SelfExpr(SelfExpr),
+    SuperExpr(SuperExpr),
     Variable(Variable),
 }
 
@@ -98,6 +99,13 @@ pub struct SelfExpr {
     pub uuid: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct SuperExpr {
+    pub keyword: Token,
+    pub method: Token,
+    pub uuid: usize,
+}
+
 pub trait Visitor<T> {
     fn visit_assignment(&mut self, expr: &Assignment) -> T;
     fn visit_binary(&mut self, expr: &Binary) -> T;
@@ -109,6 +117,7 @@ pub trait Visitor<T> {
     fn visit_unary(&mut self, expr: &Unary) -> T;
     fn visit_set(&mut self, expr: &Set) -> T;
     fn visit_self_expr(&mut self, expr: &SelfExpr) -> T;
+    fn visit_super_expr(&mut self, expr: &SuperExpr) -> T;
     fn visit_variable(&mut self, expr: &Variable) -> T;
 }
 
@@ -125,6 +134,7 @@ impl Expr {
             Expr::Unary(unary) => visitor.visit_unary(unary),
             Expr::Set(set) => visitor.visit_set(set),
             Expr::SelfExpr(self_expr) => visitor.visit_self_expr(self_expr),
+            Expr::SuperExpr(super_expr) => visitor.visit_super_expr(super_expr),
             Expr::Variable(variable) => visitor.visit_variable(variable),
         }
     }
@@ -141,6 +151,7 @@ impl Expr {
             Expr::Unary(e) => e.uuid,
             Expr::Set(e) => e.uuid,
             Expr::SelfExpr(e) => e.uuid,
+            Expr::SuperExpr(e) => e.uuid,
             Expr::Variable(e) => e.uuid,
         }
     }

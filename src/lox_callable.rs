@@ -154,17 +154,34 @@ impl LoxCallable for NativeFunction {
 #[derive(Debug, Clone)]
 pub struct LoxClass {
     pub name: String,
+    pub superclass: Option<Box<LoxClass>>,
     pub methods: HashMap<String, LoxFunction>,
 }
 
 impl LoxClass {
-    pub fn new(name: String, methods: HashMap<String, LoxFunction>) -> Self {
-        LoxClass { name, methods }
+    pub fn new(
+        name: String,
+        superclass: Option<LoxClass>,
+        methods: HashMap<String, LoxFunction>,
+    ) -> Self {
+        LoxClass {
+            name,
+            superclass: superclass.map(Box::new),
+            methods,
+        }
     }
 
     pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {
         let f = self.methods.get(name);
-        f
+        if f.is_some() {
+            f
+        } else {
+            if let Some(sc) = &self.superclass {
+                sc.find_method(name)
+            } else {
+                None
+            }
+        }
     }
 }
 

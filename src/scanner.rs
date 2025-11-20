@@ -228,7 +228,7 @@ fn get_keyword(word: &str) -> Option<TokenType> {
         "nil" => Some(TokenType::Nil),
         "or" => Some(TokenType::Or),
         "return" => Some(TokenType::Return),
-        "super" => Some(TokenType::Super),
+        "super" => Some(TokenType::SuperKW),
         "self" => Some(TokenType::SelfKW),
         "true" => Some(TokenType::True),
         "var" => Some(TokenType::Var),

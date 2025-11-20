@@ -270,6 +270,50 @@ impl expr::Visitor<Result<LiteralType, Exit>> for Interpreter {
     fn visit_self_expr(&mut self, expr: &expr::SelfExpr) -> Result<LiteralType, Exit> {
         self.look_up_variable(&expr.keyword, &Expr::SelfExpr(expr.clone()))
     }
+
+    fn visit_super_expr(&mut self, expr: &expr::SuperExpr) -> Result<LiteralType, Exit> {
+        let distance = self.locals.get(&Expr::SuperExpr(expr.clone()));
+        if distance.is_none() {
+            report(expr.keyword.line, "", "Couldn't find superclass");
+            return Err(Exit::RuntimeError);
+        }
+        let superclass = self.environment.borrow_mut().get_at(
+            *distance.unwrap(),
+            &Token {
+                token_type: TokenType::SuperKW,
+                lexeme: "super".to_string(),
+                literal: LiteralType::Nil,
+                line: expr.method.line,
+            },
+        )?;
+        let object = self.environment.borrow().get_at(
+            distance.unwrap() - 1,
+            &Token {
+                token_type: TokenType::SelfKW,
+                lexeme: "self".to_string(),
+                literal: LiteralType::Nil,
+                line: expr.method.line,
+            },
+        )?;
+
+        if let LiteralType::Callable(Callable::Class(c)) = &superclass {
+            let method = c.find_method(&expr.method.lexeme);
+            if let LiteralType::Callable(Callable::Instance(ins)) = object {
+                match method {
+                    Some(m) => return Ok(LiteralType::Callable(Callable::Function(m.bind(ins)))),
+                    None => {
+                        report(
+                            expr.method.line,
+                            "",
+                            &format!("Undefined property {}.", expr.method.lexeme),
+                        );
+                        return Err(Exit::RuntimeError);
+                    }
+                }
+            }
+        }
+        Err(Exit::RuntimeError)
+    }
 }
 
 impl stmt::Visitor<Result<(), Exit>> for Interpreter {
@@ -324,9 +368,30 @@ impl stmt::Visitor<Result<(), Exit>> for Interpreter {
     }
 
     fn visit_class(&mut self, stmt: &stmt::Class) -> Result<(), Exit> {
+        let mut superclass = LiteralType::Nil;
+        let mut s_c = None;
+        if let Some(sc) = &stmt.superclass {
+            superclass = self.evaluate(sc)?;
+            if let LiteralType::Callable(Callable::Class(c)) = &superclass {
+                s_c = Some(c.clone());
+            } else {
+                report(stmt.name.line, "", "Superclass must be a class.");
+                return Err(Exit::RuntimeError);
+            }
+        }
+
         self.environment
             .borrow_mut()
             .define(stmt.name.lexeme.clone(), LiteralType::Nil);
+
+        if let Some(Expr::Variable(_)) = &stmt.superclass {
+            self.environment = Rc::new(RefCell::new(Environment::new_with_enclosing(Rc::clone(
+                &self.environment,
+            ))));
+            self.environment
+                .borrow_mut()
+                .define("super".to_string(), superclass);
+        }
 
         let mut methods = HashMap::new();
         for method in stmt.methods.iter() {
@@ -340,7 +405,13 @@ impl stmt::Visitor<Result<(), Exit>> for Interpreter {
             }
         }
 
-        let class = LoxClass::new(stmt.name.lexeme.clone(), methods);
+        let class = LoxClass::new(stmt.name.lexeme.clone(), s_c, methods);
+
+        if let Some(Expr::Variable(_)) = &stmt.superclass {
+            let enclosing = Rc::clone(self.environment.borrow_mut().enclosing.as_ref().unwrap());
+            self.environment = enclosing;
+        }
+
         self.environment
             .borrow_mut()
             .assign(&stmt.name, LiteralType::Callable(Callable::Class(class)))?;

@@ -27,6 +27,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 impl Resolver<'_> {
@@ -89,7 +90,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn resolve_local(&mut self, expr: &Expr, name: Token) {
+    fn resolve_local(&mut self, expr: &Expr, name: &Token) {
         for (i, scope) in self.scopes.iter().enumerate().rev() {
             if scope.contains_key(&name.lexeme) {
                 self.interpreter.resolve(expr, self.scopes.len() - 1 - i);
@@ -127,13 +128,13 @@ impl expr::Visitor<Result<(), ParseError>> for Resolver<'_> {
             );
             return Err(ParseError {});
         }
-        self.resolve_local(&Expr::Variable(expr.clone()), expr.name.clone());
+        self.resolve_local(&Expr::Variable(expr.clone()), &expr.name);
         Ok(())
     }
 
     fn visit_assignment(&mut self, expr: &expr::Assignment) -> Result<(), ParseError> {
         self.resolve_expr(&expr.value)?;
-        self.resolve_local(&Expr::Assignment(expr.clone()), expr.name.clone());
+        self.resolve_local(&Expr::Assignment(expr.clone()), &expr.name);
         Ok(())
     }
 
@@ -187,7 +188,27 @@ impl expr::Visitor<Result<(), ParseError>> for Resolver<'_> {
             crate::error(expr.keyword.line, "Can't use 'this' ouside of a class.");
             return Err(ParseError {});
         }
-        self.resolve_local(&Expr::SelfExpr(expr.clone()), expr.keyword.clone());
+        self.resolve_local(&Expr::SelfExpr(expr.clone()), &expr.keyword);
+        Ok(())
+    }
+
+    fn visit_super_expr(&mut self, expr: &expr::SuperExpr) -> Result<(), ParseError> {
+        match self.current_class {
+            ClassType::None => {
+                crate::error(expr.keyword.line, "Can't use 'super' outside of a class.");
+                return Err(ParseError {});
+            }
+            ClassType::SubClass => (),
+            _ => {
+                crate::error(
+                    expr.keyword.line,
+                    "Can't use 'super' in a class with no superclass.",
+                );
+                return Err(ParseError {});
+            }
+        }
+
+        self.resolve_local(&Expr::SuperExpr(expr.clone()), &expr.keyword);
         Ok(())
     }
 }
@@ -205,6 +226,20 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
         self.current_class = ClassType::Class;
         self.declare(&stmt.name)?;
         self.define(&stmt.name);
+
+        if let Some(Expr::Variable(sc)) = &stmt.superclass {
+            if stmt.name.lexeme.eq(&sc.name.lexeme) {
+                crate::error(sc.name.line, "A class can't inherit from itself.");
+                return Err(ParseError {});
+            }
+            self.current_class = ClassType::SubClass;
+            self.resolve_expr(&Expr::Variable(sc.clone()));
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert("super".to_string(), true);
+        }
 
         self.begin_scope();
         self.scopes
@@ -225,6 +260,10 @@ impl stmt::Visitor<Result<(), ParseError>> for Resolver<'_> {
         }
 
         self.end_scope();
+
+        if let Some(Expr::Variable(_sc)) = &stmt.superclass {
+            self.end_scope();
+        }
 
         self.current_class = enclosing_class;
 

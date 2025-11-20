@@ -1,7 +1,7 @@
 use crate::{
     expr::{
-        self, Assignment, Binary, Expr, Get, Grouping, Literal, Logical, SelfExpr, Set, Unary,
-        Variable,
+        self, Assignment, Binary, Expr, Get, Grouping, Literal, Logical, SelfExpr, Set, SuperExpr,
+        Unary, Variable,
     },
     stmt::{self, Block, Class, Expression, Stmt, Var},
     token::{
@@ -86,13 +86,28 @@ impl Parser {
 
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(&TokenType::Identifier, "Expected class name.")?;
+
+        let superclass = if self.matches(&[Less]) {
+            self.consume(&TokenType::Identifier, "Expected superclassclass name.")?;
+            Some(Expr::Variable(Variable {
+                name: self.previous(),
+                uuid: uuid_next(),
+            }))
+        } else {
+            None
+        };
+
         self.consume(&TokenType::LeftBrace, "Expected '{' before class body.")?;
         let mut methods = Vec::new();
         while !self.check(&RightBrace) && !self.is_at_end() {
             methods.push(self.fun_declaration("method")?);
         }
         self.consume(&TokenType::RightBrace, "Expected '}' after class body.")?;
-        Ok(Stmt::Class(Class { name, methods }))
+        Ok(Stmt::Class(Class {
+            name,
+            methods,
+            superclass,
+        }))
     }
 
     fn fun_declaration(&mut self, kind: &str) -> Result<Stmt, ParseError> {
@@ -504,6 +519,15 @@ impl Parser {
         } else if self.matches(&[SelfKW]) {
             Ok(Expr::SelfExpr(SelfExpr {
                 keyword: self.previous(),
+                uuid: uuid_next(),
+            }))
+        } else if self.matches(&[SuperKW]) {
+            let keyword = self.previous();
+            self.consume(&Dot, "Expect '.' after 'super'.")?;
+            let method = self.consume(&Identifier, "Expect superclass method name.")?;
+            Ok(Expr::SuperExpr(SuperExpr {
+                keyword,
+                method,
                 uuid: uuid_next(),
             }))
         } else if self.matches(&[Number, String]) {
